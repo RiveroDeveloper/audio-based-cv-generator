@@ -8,10 +8,6 @@
 
 Try it out directly in your browser - no installation needed!
 
-> 📖 **Full deployment guide:** See [DEPLOYMENT.md](DEPLOYMENT.md) for all deployment options including mobile and desktop.
-
----
-
 ## 🚀 Main Features
 
 ### 🎤 **Audio-based CV Generation**
