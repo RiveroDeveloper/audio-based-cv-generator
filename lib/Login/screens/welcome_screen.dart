@@ -6,10 +6,8 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Bienvenido')),
-      body: const Center(
-        child: Text('Bienvenido!'),
-      ),
+      appBar: AppBar(title: const Text('Welcome')),
+      body: const Center(child: Text('Welcome!')),
     );
   }
 }

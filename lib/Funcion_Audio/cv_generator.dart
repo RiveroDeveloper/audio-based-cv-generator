@@ -11,6 +11,26 @@ import '../WidgetBarra.dart';
 import 'monkey_pdf_integration.dart'; // Importar la integración con Monkey PDF
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:js' as js;
+
+// Helper function to get environment variables across platforms
+String? getEnvironmentVariable(String key) {
+  if (kIsWeb) {
+    try {
+      // For web builds, try to get from window.ENV first
+      final env = js.context['ENV'];
+      if (env != null) {
+        return env[key];
+      }
+    } catch (e) {
+      print('Error accessing window.ENV: $e');
+    }
+  }
+
+  // For other platforms or fallback, use dotenv
+  return dotenv.env[key];
+}
 
 // Acceder a la instancia de Supabase
 final supabase = Supabase.instance.client;
@@ -663,7 +683,7 @@ class _CVGeneratorState extends State<CVGenerator> {
       );
 
       uploadRequest.headers.addAll({
-        'authorization': assemblyApiKey ?? '',
+        'authorization': getEnvironmentVariable('ASSEMBLY_API_KEY') ?? '',
         'content-type': 'application/json',
       });
 
@@ -697,7 +717,10 @@ class _CVGeneratorState extends State<CVGenerator> {
           try {
             var pollingResponse = await http.get(
               Uri.parse(pollingEndpoint),
-              headers: {'authorization': assemblyApiKey ?? ''},
+              headers: {
+                'authorization':
+                    getEnvironmentVariable('ASSEMBLY_API_KEY') ?? '',
+              },
             );
 
             var pollingJson = json.decode(pollingResponse.body);
@@ -836,7 +859,7 @@ class _CVGeneratorState extends State<CVGenerator> {
     try {
       print("Llamando a OpenRouter para organización inteligente...");
 
-      final openRouterApiKey = dotenv.env['OPENROUTER_API_KEY'];
+      final openRouterApiKey = getEnvironmentVariable('OPENROUTER_API_KEY');
       final openRouterUrl = Uri.parse(
         'https://openrouter.ai/api/v1/chat/completions',
       );
@@ -1085,23 +1108,30 @@ CRITICAL RULES:
         return;
 
       switch (seccion) {
+        case 'WORK EXPERIENCE':
         case 'EXPERIENCIA LABORAL':
           result['experiencia_laboral'] = contenido.trim();
           break;
+        case 'EDUCATION':
         case 'EDUCACIÓN':
-          if (!contenido.toLowerCase().contains('nula')) {
+          if (!contenido.toLowerCase().contains('nula') &&
+              !contenido.toLowerCase().contains('none')) {
             result['educacion'] = contenido.trim();
           }
           break;
+        case 'SKILLS AND CERTIFICATIONS':
         case 'HABILIDADES Y CERTIFICACIONES':
           result['habilidades'] = contenido.trim();
           break;
+        case 'LANGUAGES AND OTHER ACHIEVEMENTS':
         case 'IDIOMAS Y OTROS LOGROS':
           result['idiomas'] = contenido.trim();
           break;
+        case 'PROFESSIONAL PROFILE':
         case 'PERFIL PROFESIONAL':
           result['perfil_profesional'] = contenido.trim();
           break;
+        case 'REFERENCES AND ADDITIONAL DETAILS':
         case 'REFERENCIAS Y DETALLES ADICIONALES':
           result['referencias'] = contenido.trim();
           break;
@@ -1116,7 +1146,7 @@ CRITICAL RULES:
   Future<bool> _validateInfoWithAI() async {
     try {
       // Actualizar la API key de OpenRouter
-      final openRouterApiKey = dotenv.env['OPENROUTER_API_KEY'];
+      final openRouterApiKey = getEnvironmentVariable('OPENROUTER_API_KEY');
       final openRouterUrl = Uri.parse(
         'https://openrouter.ai/api/v1/chat/completions',
       );
@@ -2856,5 +2886,5 @@ String normalizarTexto(String texto) {
   return textoNormalizado;
 }
 
-final String? assemblyApiKey = dotenv.env['ASSEMBLY_API_KEY'];
-final String? openRouterApiKey = dotenv.env['OPENROUTER_API_KEY'];
+final String? assemblyApiKey = getEnvironmentVariable('ASSEMBLY_API_KEY');
+final String? openRouterApiKey = getEnvironmentVariable('OPENROUTER_API_KEY');
