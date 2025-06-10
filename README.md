@@ -312,6 +312,5 @@ If any step failed, refer to the "🐛 Troubleshooting" section above.
 
 ## 📝 Important Notes
 
-- **Only works in Chrome**: Application is optimized for Chrome due to audio and PDF generation APIs
 - **Requires internet**: Needs connection for Supabase and AI APIs
 - **Microphone permissions**: Browser will ask for microphone permissions
