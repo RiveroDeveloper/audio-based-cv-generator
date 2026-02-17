@@ -24,7 +24,12 @@ echo.
 
 echo 🚀 Deploying to Firebase Hosting...
 firebase deploy
-if %errorlevel% neq 0 (
+set DEPLOY_RESULT=%errorlevel%
+if %DEPLOY_RESULT% equ 0 (
+    echo 🗑️  Removing config.js from source...
+    del /q web\js\config.js 2>nul
+)
+if %DEPLOY_RESULT% neq 0 (
     echo ❌ Error deploying to Firebase!
     pause
     exit /b 1

@@ -85,10 +85,16 @@ class _AuthRouterState extends State<AuthRouter> {
     try {
       print('🔍 Verificando autenticación...');
 
-      // Verificar parámetros de URL para recuperación de contraseña
+      // Verificar token de recuperación (Supabase lo envía en el hash #, no en query)
       final uri = Uri.base;
-      final type = uri.queryParameters['type'];
-      final accessToken = uri.queryParameters['access_token'];
+      String? type = uri.queryParameters['type'];
+      String? accessToken = uri.queryParameters['access_token'];
+
+      if (uri.fragment.isNotEmpty) {
+        final fragmentParams = Uri.splitQueryString(uri.fragment);
+        type ??= fragmentParams['type'];
+        accessToken ??= fragmentParams['access_token'];
+      }
 
       print('🔗 URI: ${uri.path}');
       print('📩 type: $type');

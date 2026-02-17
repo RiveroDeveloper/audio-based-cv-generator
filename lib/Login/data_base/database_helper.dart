@@ -158,7 +158,7 @@ class DatabaseHelper {
     try {
       await _supabase.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'https://scanner-6c414.web.app/#/change-password',
+        redirectTo: 'https://scanner-6c414.web.app/change-password',
       );
       _logger.i("Email de recuperación enviado a: $email");
       return true;

@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data_base/database_helper.dart';
-import 'package:scanner_personal/WidgetBarra.dart';
-
 class CambiarPasswordScreen extends StatefulWidget {
   const CambiarPasswordScreen({super.key});
 
@@ -37,7 +35,20 @@ class _CambiarPasswordScreenState extends State<CambiarPasswordScreen> {
   Future<void> _handleRecoveryFlow() async {
     try {
       final uri = Uri.base;
-      final code = uri.queryParameters['code'];
+      String? code = uri.queryParameters['code'];
+
+      // Supabase puede enviar code en query O access_token en hash (implicit)
+      if (code == null && uri.fragment.isNotEmpty) {
+        final fragmentParams = Uri.splitQueryString(uri.fragment);
+        code = fragmentParams['code'];
+        final accessToken = fragmentParams['access_token'];
+        if (accessToken != null && fragmentParams['type'] == 'recovery') {
+          await Supabase.instance.client.auth.setSession(accessToken);
+          if (!mounted) return;
+          setState(() => userEmail = Supabase.instance.client.auth.currentUser?.email);
+          return;
+        }
+      }
 
       if (code != null && code.isNotEmpty) {
         try {
