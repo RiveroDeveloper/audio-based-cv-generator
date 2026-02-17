@@ -65,8 +65,12 @@ class _CVFormEditorState extends State<CVFormEditor> {
     });
 
     try {
-      final user = "3";
-
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser == null) {
+        _formError = 'Debes iniciar sesión para acceder al formulario';
+        return;
+      }
+      final user = currentUser.id;
       id = user;
 
       // Buscar si ya existe un perfil con este user_id

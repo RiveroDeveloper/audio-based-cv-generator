@@ -1,0 +1,8 @@
+// Copy to config.js and fill with your values from .env
+// config.js is gitignored - generated at build time from .env
+window.ENV = {
+  SUPABASE_URL: '',
+  SUPABASE_ANON_KEY: '',
+  ASSEMBLY_API_KEY: '',
+  OPENROUTER_API_KEY: ''
+};

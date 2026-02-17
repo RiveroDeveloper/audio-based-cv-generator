@@ -4,6 +4,14 @@ echo CV Scanner - Web Deployment Script
 echo ========================================
 echo.
 
+echo 📝 Generating config.js from .env...
+dart run scripts/generate_config.dart
+if %errorlevel% neq 0 (
+    echo ❌ Error generating config!
+    pause
+    exit /b 1
+)
+echo.
 echo 🔧 Building Flutter Web App...
 flutter build web --release
 if %errorlevel% neq 0 (
@@ -33,7 +41,6 @@ echo.
 echo 📊 Firebase Console:
 echo https://console.firebase.google.com/project/scanner-6c414/overview
 echo.
-echo ⚠️  REMINDER: Update API keys in web/js/config.js
-echo    if you haven't done so already!
+echo ℹ️  Config is generated from .env at build time
 echo.
 pause 

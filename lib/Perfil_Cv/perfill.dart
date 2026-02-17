@@ -26,7 +26,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Funcion para los datos de la base de datos Check
   Future<void> fetchUserData() async {
     final supabase = Supabase.instance.client;
-    final userId = '3';
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
+      setState(() {
+        userData = {};
+        isLoading = false;
+      });
+      return;
+    }
 
     try {
       final response =
@@ -129,12 +136,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     onPressed: () async {
+                      final uid = Supabase.instance.client.auth.currentUser?.id;
+                      if (uid == null) return;
                       final result = await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder:
                               (_) => EditProfileScreen(
-                                userId: '3', // change to authenticated user
+                                userId: uid,
                                 userData: userData,
                               ),
                         ),

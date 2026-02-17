@@ -48,6 +48,8 @@ app.*.map.json
 .env
 *.env
 !.env.example
+# Generated from .env at build time - contains secrets
+web/js/config.js
 # API keys and secrets
 *key*
 *secret*
