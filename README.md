@@ -1,44 +1,44 @@
-# 📄 CV Generator - Audio-based Resume Generator
+# CV Generator - Audio-based Resume Generator
 
-## 🌐 Live Demo
+## Live Demo
 
-**🎉 The app is live and deployed!**
+** The app is live and deployed!**
 
 **Web App:** https://scanner-6c414.web.app
 
 Try it out directly in your browser - no installation needed!
 
-## 🚀 Main Features
+## Main Features
 
-### 🎤 **Audio-based CV Generation**
+### **Audio-based CV Generation**
 - **Section-based recording**: Guided system that allows recording audio for each CV section
 - **Smart AI**: Uses OpenRouter API to automatically process and organize audio information
 - **Automatic transcription**: Converts audio to text and extracts structured data
 - **Smart validation**: System automatically validates and organizes information
 
-### ✍️ **Manual Form**
+### **Manual Form**
 - **Intuitive interface**: Complete form for manually entering CV information
 - **Real-time preview**: Allows viewing how the CV will look before generating the PDF
 - **Data validation**: Validation system to ensure correct information
 
-### 📑 **Professional PDF Generation**
+### **Professional PDF Generation**
 - **Modern design**: CV with blue-purple gradient, Inter typography, and professional layout
 - **Responsive**: Properly adapts to A4 format
 - **Interactive preview**: Allows reviewing the CV before downloading
 - **Direct download**: Automatically generates and downloads the PDF
 
-### 🔐 **Authentication System**
+### **Authentication System**
 - **Secure login**: Authentication system with Supabase
 - **User registration**: Allows creating new accounts
 - **Session management**: Automatic user session handling
 - **Password recovery**: System for changing passwords
 
-### 💾 **Database**
+### **Database**
 - **Cloud storage**: Uses Supabase to store information
 - **CV history**: Saves all CVs created by the user
 - **Synchronization**: Access information from any device
 
-## 🛠️ Technologies Used
+## Technologies Used
 
 - **Flutter Web** - Main framework for the interface
 - **Dart** - Programming language
@@ -48,7 +48,7 @@ Try it out directly in your browser - no installation needed!
 - **Google Fonts** - Modern typography
 - **Audio Recording** - Audio recording and playback
 
-## 📋 Prerequisites
+## Prerequisites
 
 To run this project locally you need:
 
@@ -57,7 +57,7 @@ To run this project locally you need:
 - **Chrome** (recommended browser)
 - **Internet connection** (for APIs and Supabase)
 
-## 🔧 Installation and Configuration
+## Installation and Configuration
 
 ### 1. Clone the repository
 ```bash
@@ -99,7 +99,7 @@ PDFMONKEY_API_KEY=your_pdfmonkey_api_key_here
 - **PDF Monkey**: Register at [pdfmonkey.io](https://pdfmonkey.io) for PDF generation
 - **Supabase**: Create a project at [supabase.com](https://supabase.com) for database services
 
-> ⚠️ **Important**: Never commit your `.env` file to version control. The `.gitignore` file is already configured to exclude it.
+> **Important**: Never commit your `.env` file to version control. The `.gitignore` file is already configured to exclude it.
 
 ### 5. Verify everything is ready
 ```bash
@@ -112,9 +112,9 @@ flutter devices
 flutter run -d chrome
 ```
 
-> 💡 **Tip**: If this is your first time running Flutter web, it may take a few minutes to download the necessary web dependencies.
+> **Tip**: If this is your first time running Flutter web, it may take a few minutes to download the necessary web dependencies.
 
-## 🚀 Project Execution
+## Project Execution
 
 ### **Main command to run:**
 ```bash
@@ -157,32 +157,32 @@ flutter config --enable-web
 flutter run -d chrome
 ```
 
-> ⚠️ **Important**: 
+> **Important**:
 > - This project is optimized for **Chrome** due to audio and PDF generation APIs
 > - If you have issues, first run `flutter clean && flutter pub get`
 > - Make sure Flutter web is enabled with `flutter config --enable-web`
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 lib/
-├── main.dart                          # Application entry point
-├── Funcion_Audio/                     # Audio generation module
-│   ├── cv_generator.dart              # Main CV audio generator
-│   └── monkey_pdf_integration.dart    # PDF generation integration
-├── Formulario/                        # Manual form module
-│   └── cv_form.dart                   # Form for manual CV creation
-├── Login/                             # Authentication system
-│   ├── login_screen.dart              # Login screen
-│   ├── register_screen.dart           # Registration screen
-│   └── auth_router.dart               # Authentication router
-├── Home/                              # Main screen
-├── Perfil_Cv/                         # Profile and CV management
-├── Configuracion/                     # App settings
-└── AI/                                # AI integration
+ main.dart # Application entry point
+ Funcion_Audio/ # Audio generation module
+ cv_generator.dart # Main CV audio generator
+ monkey_pdf_integration.dart # PDF generation integration
+ Formulario/ # Manual form module
+ cv_form.dart # Form for manual CV creation
+ Login/ # Authentication system
+ login_screen.dart # Login screen
+ register_screen.dart # Registration screen
+ auth_router.dart # Authentication router
+ Home/ # Main screen
+ Perfil_Cv/ # Profile and CV management
+ Configuracion/ # App settings
+ AI/ # AI integration
 ```
 
-## 🎯 Usage Flow
+## Usage Flow
 
 ### **Method 1: Audio Generation**
 1. **Login**: Sign in to the application
@@ -199,7 +199,7 @@ lib/
 4. **Preview**: Review how the CV will look
 5. **Generate PDF**: Create and download CV as PDF
 
-## 🔑 Key Features
+## Key Features
 
 ### **Smart Audio System**
 - Recording for specific sections (personal data, experience, education, etc.)
@@ -219,7 +219,7 @@ lib/
 - Modification history
 - Automatic cloud backup
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### **Error: "Could not find an option named '--web-renderer'"**
 - This error indicates you're using a Flutter version that no longer supports that flag
@@ -227,11 +227,11 @@ lib/
 
 ### **Error: "No supported devices connected"**
 - Flutter web is not enabled or Chrome is not installed
-- **Solution**: 
-  ```bash
-  flutter config --enable-web
-  flutter devices
-  ```
+- **Solution**:
+ ```bash
+ flutter config --enable-web
+ flutter devices
+ ```
 
 ### **Error: "Cannot connect to Supabase"**
 - Verify that environment variables are properly configured
@@ -242,75 +242,75 @@ lib/
 ### **Error: "PDF not generating correctly"**
 - Issues with JavaScript PDF generation libraries
 - **Solution**:
-  ```bash
-  flutter clean
-  flutter pub get
-  flutter run -d chrome
-  ```
+ ```bash
+ flutter clean
+ flutter pub get
+ flutter run -d chrome
+ ```
 - Make sure to use **Chrome** (not other browsers)
 - Confirm JavaScript is enabled
 
 ### **Error: "Audio not recording"**
 - Microphone permissions not granted or HTTPS issues
 - **Solution**:
-  - Allow microphone permissions in Chrome
-  - Verify microphone is working
-  - If on localhost, it should work automatically
-  - For production, HTTPS is required
+ - Allow microphone permissions in Chrome
+ - Verify microphone is working
+ - If on localhost, it should work automatically
+ - For production, HTTPS is required
 
 ### **Error: "Target of URI doesn't exist" when loading files**
 - Issues with asset paths
 - **Solution**:
-  ```bash
-  flutter pub get
-  flutter clean
-  flutter run -d chrome
-  ```
+ ```bash
+ flutter pub get
+ flutter clean
+ flutter run -d chrome
+ ```
 
 ### **Error: "XMLHttpRequest error" with Supabase**
 - CORS or network configuration issues
 - **Solution**:
-  - Check your internet connection
-  - Confirm Supabase URLs are correct
+ - Check your internet connection
+ - Confirm Supabase URLs are correct
 
-## ✅ Installation Verification
+## Installation Verification
 
 ### **Checklist after cloning:**
 
-1. **✅ Flutter configured correctly**
-   ```bash
-   flutter doctor
-   # Should show checkmarks for Web development
-   ```
+1. ** Flutter configured correctly**
+ ```bash
+ flutter doctor
+ # Should show checkmarks for Web development
+ ```
 
-2. **✅ Dependencies installed**
-   ```bash
-   flutter pub get
-   # Should not show errors
-   ```
+2. ** Dependencies installed**
+ ```bash
+ flutter pub get
+ # Should not show errors
+ ```
 
-3. **✅ Chrome available as device**
-   ```bash
-   flutter devices
-   # Should list "Chrome" as available device
-   ```
+3. ** Chrome available as device**
+ ```bash
+ flutter devices
+ # Should list "Chrome" as available device
+ ```
 
-4. **✅ Environment variables configured**
-   - Verify existence of `.env` file
-   - Confirm it contains `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+4. ** Environment variables configured**
+ - Verify existence of `.env` file
+ - Confirm it contains `SUPABASE_URL` and `SUPABASE_ANON_KEY`
 
-5. **✅ First run successful**
-   ```bash
-   flutter run -d chrome
-   # Application should open in Chrome and show login screen
-   ```
+5. ** First run successful**
+ ```bash
+ flutter run -d chrome
+ # Application should open in Chrome and show login screen
+ ```
 
 ### **All working?**
-If you completed all the steps above without errors, your installation is complete! 🎉
+If you completed all the steps above without errors, your installation is complete!
 
-If any step failed, refer to the "🐛 Troubleshooting" section above.
+If any step failed, refer to the " Troubleshooting" section above.
 
-## 📝 Important Notes
+## Important Notes
 
 - **Requires internet**: Needs connection for Supabase and AI APIs
 - **Microphone permissions**: Browser will ask for microphone permissions
