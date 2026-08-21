@@ -85,6 +85,16 @@ class _AuthRouterState extends State<AuthRouter> {
     try {
       print('🔍 Verificando autenticación...');
 
+      // Auth disabled (demo mode): skip Supabase session checks and go straight
+      // to the home screen. Re-enable by building with
+      // --dart-define=AUTH_DISABLED=false or setting this const to false.
+      const authDisabled = String.fromEnvironment('AUTH_DISABLED', defaultValue: 'true') == 'true';
+      if (authDisabled) {
+        print('🔓 Auth deshabilitada (demo), navegando a home');
+        _navigateToHome();
+        return;
+      }
+
       // Verificar token de recuperación (Supabase lo envía en el hash #, no en query)
       final uri = Uri.base;
       String? type = uri.queryParameters['type'];

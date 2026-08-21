@@ -8,6 +8,10 @@
 
 Try it out directly in your browser - no installation needed!
 
+> **Authentication is disabled on the live demo** so visitors can try the
+> audio CV generator without creating an account. To re-enable it, build with
+> `flutter build web --dart-define=AUTH_DISABLED=false` and redeploy.
+
 ## Main Features
 
 ### **Audio-based CV Generation**
