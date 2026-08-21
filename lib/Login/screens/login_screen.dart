@@ -196,11 +196,11 @@ class LoginScreenState extends State<LoginScreen> {
                             setStateDialog(() => isLoadingDialog = true);
 
                             try {
-                              final success = await DatabaseHelper.instance
+                              final errorMsg = await DatabaseHelper.instance
                                   .recuperarPassword(email);
-                              Navigator.pop(context, success);
+                              Navigator.pop(context, errorMsg);
                             } catch (e) {
-                              Navigator.pop(context, false);
+                              Navigator.pop(context, e.toString());
                             }
                           },
                   child:
@@ -219,10 +219,10 @@ class LoginScreenState extends State<LoginScreen> {
       },
     );
 
-    if (enviar == true) {
+    if (enviar == null) {
       _mostrarExito('Check your email to continue with the password change');
-    } else if (enviar == false) {
-      _mostrarError('Error sending recovery email');
+    } else {
+      _mostrarError('Error: $enviar');
     }
   }
 

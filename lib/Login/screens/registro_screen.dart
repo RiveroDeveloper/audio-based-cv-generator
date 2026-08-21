@@ -142,7 +142,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
     final apellido = apellidoController.text.trim();
 
     try {
-      final success = await DatabaseHelper.instance.registrarUsuario(
+      final errorMsg = await DatabaseHelper.instance.registrarUsuario(
         nombre,
         apellido,
         correo,
@@ -151,15 +151,12 @@ class _RegistroScreenState extends State<RegistroScreen> {
 
       if (!mounted) return;
 
-      if (success) {
+      if (errorMsg == null) {
         _mostrarExito('User registered successfully');
 
-        // Navigate to home and clear navigation stack
         Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
       } else {
-        _mostrarError(
-          'Error registering user. The email may already be in use.',
-        );
+        _mostrarError(errorMsg);
       }
     } catch (e) {
       if (!mounted) return;

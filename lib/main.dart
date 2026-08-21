@@ -62,10 +62,10 @@ Future<void> main() async {
     print('⚠️ Error loading environment variables: $e');
     print('🔄 Using hardcoded credentials as fallback...');
 
-    // Fallback to hardcoded credentials if everything fails
-    supabaseUrl = 'https://pjibtcshdaewixdcvdtx.supabase.co';
+    // Fallback to hardcoded credentials if everything fails (must match .env)
+    supabaseUrl = 'https://mujuqbmzksvvqmhssvls.supabase.co';
     supabaseAnonKey =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqaWJ0Y3NoZGFld2l4ZGN2ZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MTg5NDcsImV4cCI6MjA2NTA5NDk0N30.jEfczCIWrpnQBuDrIPlX8z6xX1L_UqGGIR1AGLHfR0A';
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11anVxYm16a3N2dnFtaHNzdmxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzNDkwMjYsImV4cCI6MjA4NjkyNTAyNn0._-AV69Jgc0iWjCVCTb9Te-d0MyNhy1qfJKTDmSGrHsY';
   }
 
   // Ensure we have valid credentials

@@ -27,7 +27,8 @@ class DatabaseHelper {
   }
 
   /// **Registrar usuario usando Supabase Auth**
-  Future<bool> registrarUsuario(
+  /// Retorna null si éxito, o el mensaje de error si falla.
+  Future<String?> registrarUsuario(
     String nombre,
     String apellido,
     String correo,
@@ -36,7 +37,6 @@ class DatabaseHelper {
     try {
       _logger.i("Iniciando registro para: $correo");
 
-      // Registrar en Supabase Auth (el trigger automáticamente creará el registro en usuarios)
       final authResponse = await _supabase.auth.signUp(
         email: correo,
         password: password,
@@ -48,10 +48,8 @@ class DatabaseHelper {
           "Usuario registrado exitosamente en Auth: ${authResponse.user!.email}",
         );
 
-        // Esperar un momento para que el trigger se ejecute
         await Future.delayed(Duration(milliseconds: 500));
 
-        // Verificar la sincronización (sin bloquear el flujo)
         try {
           final userData = await obtenerUsuarioPorEmail(correo);
           if (userData != null) {
@@ -63,14 +61,17 @@ class DatabaseHelper {
           _logger.w("⚠️ Error verificando sincronización: $e");
         }
 
-        return true;
+        return null;
       } else {
         _logger.w("Registro fallido - respuesta de auth vacía");
-        return false;
+        return "Registration failed. Please try again.";
       }
+    } on AuthException catch (e) {
+      _logger.e("Error en registro (Auth): $e");
+      return e.message;
     } catch (e) {
       _logger.e("Error en registro: $e");
-      return false;
+      return e.toString();
     }
   }
 
@@ -154,17 +155,21 @@ class DatabaseHelper {
   }
 
   /// **Recuperar contraseña**
-  Future<bool> recuperarPassword(String email) async {
+  /// Retorna null si éxito, o el mensaje de error si falla.
+  Future<String?> recuperarPassword(String email) async {
     try {
       await _supabase.auth.resetPasswordForEmail(
         email,
         redirectTo: 'https://scanner-6c414.web.app/change-password',
       );
       _logger.i("Email de recuperación enviado a: $email");
-      return true;
+      return null;
+    } on AuthException catch (e) {
+      _logger.e("Error enviando email de recuperación: $e");
+      return e.message;
     } catch (e) {
       _logger.e("Error enviando email de recuperación: $e");
-      return false;
+      return e.toString();
     }
   }
 

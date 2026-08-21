@@ -3,6 +3,6 @@
 window.ENV = {
   SUPABASE_URL: '',
   SUPABASE_ANON_KEY: '',
-  ASSEMBLY_API_KEY: '',
-  OPENROUTER_API_KEY: ''
+  OPENROUTER_API_KEY: '',
+  TRANSCRIBE_FUNCTION_URL: 'https://us-central1-scanner-6c414.cloudfunctions.net/transcribeAudio'
 };

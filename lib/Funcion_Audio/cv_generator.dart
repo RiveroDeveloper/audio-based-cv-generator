@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:html' as html;
 import 'package:record/record.dart';
@@ -295,9 +294,18 @@ class _CVGeneratorState extends State<CVGenerator> {
     }
   }
 
+  // Para web: AudioElement nativo (audioplayers tiene problemas con blob URLs)
+  html.AudioElement? _webAudioElement;
+
   Future<void> _playRecording() async {
     if (_isPlaying) {
-      await _audioPlayer.stop();
+      if (kIsWeb && _webAudioElement != null) {
+        _webAudioElement!.pause();
+        _webAudioElement!.remove();
+        _webAudioElement = null;
+      } else {
+        await _audioPlayer.stop();
+      }
       setState(() {
         _isPlaying = false;
       });
@@ -307,10 +315,25 @@ class _CVGeneratorState extends State<CVGenerator> {
     final audioUrl = _audioUrls[cvSections[_currentSectionIndex].id];
     if (audioUrl != null) {
       try {
-        await _audioPlayer.play(DeviceFileSource(audioUrl));
-        setState(() {
-          _isPlaying = true;
-        });
+        if (kIsWeb || audioUrl.startsWith('blob:')) {
+          // Web: usar AudioElement nativo para blob URLs
+          _webAudioElement?.remove();
+          _webAudioElement = html.AudioElement()
+            ..src = audioUrl
+            ..controls = false
+            ..autoplay = true;
+          _webAudioElement!.onEnded.listen((_) {
+            if (mounted) setState(() => _isPlaying = false);
+          });
+          _webAudioElement!.onError.listen((_) {
+            if (mounted) setState(() => _isPlaying = false);
+          });
+          html.document.body?.append(_webAudioElement!);
+          setState(() => _isPlaying = true);
+        } else {
+          await _audioPlayer.play(DeviceFileSource(audioUrl));
+          setState(() => _isPlaying = true);
+        }
       } catch (e) {
         print("Error al reproducir audio: $e");
       }
@@ -484,7 +507,7 @@ class _CVGeneratorState extends State<CVGenerator> {
             print("Bytes de audio obtenidos: ${audioBytes.length} bytes");
             print("Subiendo audio a Supabase como: $fileName");
 
-            // Subir a Supabase
+            // Subir a Supabase (requiere Storage RLS: audios_upload_authenticated)
             final response = await supabase.storage
                 .from('audios')
                 .uploadBinary(
@@ -495,7 +518,7 @@ class _CVGeneratorState extends State<CVGenerator> {
 
             print("Respuesta de Supabase al subir: $response");
 
-            // Guardar la URL del audio
+            // URL pública (bucket público)
             final audioUrl = supabase.storage
                 .from('audios')
                 .getPublicUrl(fileName);
@@ -512,7 +535,8 @@ class _CVGeneratorState extends State<CVGenerator> {
             });
 
             try {
-              String transcripcion = await _transcribirAudio(audioUrl);
+              // Llamada directa a ElevenLabs con los bytes ya en memoria (sin Edge Functions)
+              String transcripcion = await _transcribirConElevenLabsDirecto(audioBytes);
               transcripcionesPorSeccion[section.title] = transcripcion;
               print("Transcripción de ${section.title} completada");
             } catch (e) {
@@ -523,8 +547,14 @@ class _CVGeneratorState extends State<CVGenerator> {
             }
           } catch (e) {
             print("Error procesando audio de ${section.title}: $e");
+            // Distinguir: upload falla antes de transcripción
+            final isUploadError = e.toString().toLowerCase().contains('storage') ||
+                e.toString().toLowerCase().contains('bucket') ||
+                e.toString().toLowerCase().contains('policy') ||
+                e.toString().toLowerCase().contains('403') ||
+                e.toString().toLowerCase().contains('401');
             transcripcionesPorSeccion[section.title] =
-                "Transcription error: $e";
+                isUploadError ? "Upload error: $e" : "Transcription error: $e";
             // Continuar con el proceso a pesar del error
           }
         }
@@ -624,8 +654,43 @@ class _CVGeneratorState extends State<CVGenerator> {
         }
 
         // Cargar la información extraída por la IA para editar
+        print("📝 [FORMULARIO] Cargando información analizada al formulario...");
+        print("📝 [FORMULARIO] Campos recibidos: ${analyzedTranscription.keys.join(', ')}");
+        print("📝 [FORMULARIO] Campos con datos: ${analyzedTranscription.entries.where((e) => e.value.toString().isNotEmpty).map((e) => '${e.key}=${e.value.toString().substring(0, e.value.toString().length > 20 ? 20 : e.value.toString().length)}...').join(', ')}");
+        
         _editableInfo = Map<String, dynamic>.from(analyzedTranscription);
-        _asegurarTiposDeDatos(); // Llamar al nuevo método para asegurar tipos
+        _asegurarTiposDeDatos();
+        
+        print("✅ [FORMULARIO] _editableInfo actualizado con ${_editableInfo.length} campos");
+
+        // Si hubo errores, avisar al usuario
+        final hasUploadErrors = transcripcionesPorSeccion.values
+            .any((t) => t.toLowerCase().contains('upload error'));
+        final hasTranscriptionErrors = transcripcionesPorSeccion.values
+            .any((t) => t.toLowerCase().contains('transcription error'));
+        if (hasUploadErrors && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Upload failed. Check Storage policies (supabase/storage_policies.sql).',
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 6),
+            ),
+          );
+        } else if (hasTranscriptionErrors && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Transcription failed. Fill the form manually or check Edge Function config.',
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
 
         // Proceso completado
         setState(() {
@@ -670,98 +735,99 @@ class _CVGeneratorState extends State<CVGenerator> {
     }
   }
 
-  // Método para transcribir audio usando AssemblyAI
+  /// Llama directamente a ElevenLabs desde el browser con los bytes del audio.
+  /// Evita pasar por Supabase Edge Functions (y sus problemas de JWT).
+  Future<String> _transcribirConElevenLabsDirecto(Uint8List audioBytes) async {
+    final apiKey = getEnvironmentVariable('ELEVENLABS_API_KEY') ?? '';
+    if (apiKey.isEmpty) {
+      print('[TRANSCRIPCIÓN] ELEVENLABS_API_KEY no configurada');
+      return '';
+    }
+
+    // ElevenLabs requiere al menos ~0.5s de audio (~5000 bytes a bitrate típico de WebM)
+    if (audioBytes.length < 5000) {
+      print('[TRANSCRIPCIÓN] Audio demasiado corto (${audioBytes.length} bytes), omitiendo');
+      return '';
+    }
+
+    print('[TRANSCRIPCIÓN] Enviando ${audioBytes.length} bytes directo a ElevenLabs...');
+
+    final completer = Completer<String>();
+
+    try {
+      final blob = html.Blob([audioBytes], 'audio/webm');
+      final formData = html.FormData();
+      formData.appendBlob('file', blob, 'audio.webm');
+      formData.append('model_id', 'scribe_v2');
+
+      final xhr = html.HttpRequest();
+      xhr.open('POST', 'https://api.elevenlabs.io/v1/speech-to-text');
+      xhr.setRequestHeader('xi-api-key', apiKey);
+
+      xhr.onLoad.listen((event) {
+        try {
+          if (xhr.status == 200) {
+            final data = json.decode(xhr.responseText!) as Map;
+            final text = data['text']?.toString() ?? '';
+            print('[TRANSCRIPCIÓN] OK (${text.length} chars)');
+            if (!completer.isCompleted) completer.complete(text);
+          } else {
+            print('[TRANSCRIPCIÓN] ElevenLabs error ${xhr.status}: ${xhr.responseText}');
+            if (!completer.isCompleted) completer.complete('');
+          }
+        } catch (e) {
+          print('[TRANSCRIPCIÓN] Error parseando respuesta: $e');
+          if (!completer.isCompleted) completer.complete('');
+        }
+      });
+
+      xhr.onError.listen((event) {
+        print('[TRANSCRIPCIÓN] XHR error (posible CORS). Verifica que la API key sea válida.');
+        if (!completer.isCompleted) completer.complete('');
+      });
+
+      xhr.send(formData);
+      return await completer.future;
+    } catch (e) {
+      print('[TRANSCRIPCIÓN] Excepción: $e');
+      return '';
+    }
+  }
+
+  /// Mantener como fallback por compatibilidad
   Future<String> _transcribirAudio(String audioUrl) async {
-    print("Iniciando transcripción para URL: $audioUrl");
+    print("[TRANSCRIPCIÓN] URL: $audioUrl");
     String transcripcion = "";
 
     try {
-      // Primero, enviamos la URL del audio a AssemblyAI
-      var uploadRequest = http.Request(
-        'POST',
-        Uri.parse('https://api.assemblyai.com/v2/transcript'),
+      final res = await supabase.functions.invoke(
+        'transcribe-audio',
+        body: {'audio_url': audioUrl},
       );
 
-      uploadRequest.headers.addAll({
-        'authorization': getEnvironmentVariable('ASSEMBLY_API_KEY') ?? '',
-        'content-type': 'application/json',
-      });
+      print("[TRANSCRIPCIÓN] Status: ${res.status}, Data type: ${res.data.runtimeType}");
 
-      uploadRequest.body = json.encode({
-        'audio_url': audioUrl,
-        'language_detection': true, // Auto-detect language
-      });
-
-      // Enviamos la solicitud
-      var uploadResponse = await http.Client().send(uploadRequest);
-      var uploadResponseData = await http.Response.fromStream(uploadResponse);
-      var responseJson = json.decode(uploadResponseData.body);
-
-      print("Respuesta inicial de transcripción: $responseJson");
-
-      if (uploadResponseData.statusCode == 200) {
-        // Obtenemos el ID de la transcripción
-        String transcriptId = responseJson['id'];
-        String pollingEndpoint =
-            'https://api.assemblyai.com/v2/transcript/$transcriptId';
-
-        print("ID de transcripción: $transcriptId");
-
-        // Consultamos hasta que la transcripción esté lista
-        bool completed = false;
-        int maxAttempts = 60; // 3 minutos máximo (60 intentos x 3 segundos)
-        int attempts = 0;
-
-        while (!completed && attempts < maxAttempts) {
-          attempts++;
-          try {
-            var pollingResponse = await http.get(
-              Uri.parse(pollingEndpoint),
-              headers: {
-                'authorization':
-                    getEnvironmentVariable('ASSEMBLY_API_KEY') ?? '',
-              },
-            );
-
-            var pollingJson = json.decode(pollingResponse.body);
-            print("Estado de transcripción: ${pollingJson['status']}");
-
-            if (pollingJson['status'] == 'completed') {
-              transcripcion = pollingJson['text'];
-              print("Transcripción obtenida: $transcripcion");
-              completed = true;
-              break;
-            } else if (pollingJson['status'] == 'error') {
-              throw Exception(
-                'Error en la transcripción: ${pollingJson['error']}',
-              );
-            } else if (pollingJson['status'] == 'processing' ||
-                pollingJson['status'] == 'queued') {
-              // Seguimos esperando
-              await Future.delayed(Duration(seconds: 3));
-              print("Intento $attempts: Esperando transcripción...");
-            } else {
-              print("Estado desconocido: ${pollingJson['status']}");
-              await Future.delayed(Duration(seconds: 3));
-            }
-          } catch (e) {
-            print("Error al consultar estado de transcripción: $e");
-            await Future.delayed(Duration(seconds: 3));
-          }
-        }
-
-        if (!completed) {
-          throw Exception(
-            'Tiempo de espera agotado. La transcripción está tomando demasiado tiempo.',
-          );
-        }
+      Map<String, dynamic> data;
+      if (res.data is Map) {
+        data = Map<String, dynamic>.from(res.data as Map);
+      } else if (res.data != null) {
+        data = Map<String, dynamic>.from(json.decode(res.data.toString()) as Map);
       } else {
-        throw Exception(
-          'Error al iniciar la transcripción: ${uploadResponseData.statusCode} - ${responseJson['error']}',
-        );
+        throw Exception('Empty response from transcribe-audio');
+      }
+
+      if (data.containsKey('error')) {
+        throw Exception(data['error'].toString());
+      }
+
+      transcripcion = data['text']?.toString() ?? '';
+      if (transcripcion.isEmpty) {
+        print("[TRANSCRIPCIÓN] WARNING: empty text returned");
+      } else {
+        print("[TRANSCRIPCIÓN] OK (${transcripcion.length} chars)");
       }
     } catch (e) {
-      print("Error en la transcripción: $e");
+      print("[TRANSCRIPCIÓN] Error: $e");
       transcripcion = "Transcription error: $e";
     }
 
@@ -807,65 +873,23 @@ class _CVGeneratorState extends State<CVGenerator> {
       "disponibilidad_entrevistas": "",
     };
 
-    // Si la transcripción está vacía o es un error, generar datos de ejemplo
+    // Si la transcripción está vacía o es un error, devolver campos vacíos (no datos falsos)
     if (transcripcion.isEmpty ||
-        transcripcion.toLowerCase().contains('error')) {
-      print("Transcripción vacía o con error, usando datos de ejemplo");
-      return {
-        "nombres": "John",
-        "apellidos": "Smith",
-        "fotografia": "",
-        "direccion": "123 Main Street, New York, NY 10001",
-        "telefono": "+1 (555) 123-4567",
-        "correo": "john.smith@email.com",
-        "nacionalidad": "American",
-        "fecha_nacimiento": "1990-05-15",
-        "estado_civil": "Single",
-        "linkedin": "https://linkedin.com/in/johnsmith",
-        "github": "https://github.com/johnsmith",
-        "portafolio": "https://johnsmith.dev",
-        "perfil_profesional":
-            "Full Stack Developer with 5 years of experience in modern web technologies. Specialized in React, Node.js and databases.",
-        "objetivos_profesionales":
-            "Looking to contribute to innovative projects that allow me to grow professionally and add value to the team.",
-        "experiencia_laboral":
-            "• Senior Developer at TechCorp (2021-present)\n• Junior Developer at StartupXYZ (2019-2021)\n• Freelancer (2018-2019)",
-        "educacion":
-            "• Computer Science - State University (2014-2018)\n• AWS Solutions Architect Certification (2020)",
-        "habilidades":
-            "JavaScript, Python, React, Node.js, AWS, Docker, Git, Agile Methodologies",
-        "idiomas": "English (Native), Spanish (B2), Portuguese (A2)",
-        "certificaciones": "AWS Solutions Architect, Scrum Master Certified",
-        "proyectos":
-            "E-commerce Platform, REST API for inventory management, Mobile delivery app",
-        "publicaciones": "",
-        "premios": "Best developer of the year 2022 at TechCorp",
-        "voluntariados": "Mentor at CoderDojo",
-        "referencias":
-            "Maria Garcia - Tech Lead at TechCorp - maria.garcia@techcorp.com",
-        "expectativas_laborales":
-            "Remote or hybrid work, competitive salary, growth opportunities",
-        "experiencia_internacional":
-            "Participation in project with team from Brazil",
-        "permisos_documentacion": "Driver's license, valid passport",
-        "vehiculo_licencias": "Class A driver's license",
-        "contacto_emergencia": "Anna Smith (Mother) - +1 (555) 234-5678",
-        "disponibilidad_entrevistas":
-            "Available Monday to Friday from 9:00 AM to 5:00 PM",
-      };
+        transcripcion.toLowerCase().contains('transcription error')) {
+      print("Transcripción vacía o con error - devolviendo campos vacíos");
+      return defaultJson;
     }
 
-    // Intentar con OpenRouter LLM
     try {
-      print("Llamando a OpenRouter para organización inteligente...");
+      print("[ANÁLISIS LLM] Enviando transcripción (${transcripcion.length} chars) directo a OpenRouter...");
 
-      final openRouterApiKey = getEnvironmentVariable('OPENROUTER_API_KEY');
-      final openRouterUrl = Uri.parse(
-        'https://openrouter.ai/api/v1/chat/completions',
-      );
+      final apiKey = getEnvironmentVariable('OPENROUTER_API_KEY') ?? '';
+      if (apiKey.isEmpty) {
+        print('[ANÁLISIS LLM] OPENROUTER_API_KEY no configurada, usando fallback');
+        return _useFallbackExtraction(transcripcion, defaultJson);
+      }
 
-      final prompt =
-          '''Extract specific CV data from this audio transcription and preserve the ORIGINAL LANGUAGE:
+      final prompt = '''Extract specific CV data from this audio transcription and preserve the ORIGINAL LANGUAGE:
 
 TRANSCRIPTION:
 "$transcripcion"
@@ -873,7 +897,7 @@ TRANSCRIPTION:
 Respond ONLY with valid JSON using EXACTLY these fields:
 {
   "nombres": "first names only",
-  "apellidos": "last names only", 
+  "apellidos": "last names only",
   "direccion": "address only",
   "telefono": "phone only",
   "correo": "email only",
@@ -908,65 +932,92 @@ CRITICAL RULES:
 - Extract ONLY specific information for each field
 - DO NOT repeat the entire transcription in each field
 - If no information exists for a field, use ""
-- For phone numbers: Convert spoken numbers (like "three zero five") to actual digits (like "305")
+- For phone numbers: Convert spoken numbers to actual digits
 - For dates: Use YYYY-MM-DD format when possible
 - Respond with ONLY the JSON, nothing else''';
 
-      final response = await http.post(
-        openRouterUrl,
-        headers: {
-          'Authorization': 'Bearer $openRouterApiKey',
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://cv-generator-app.com',
-        },
-        body: json.encode({
-          'messages': [
-            {
-              'role': 'system',
-              'content':
-                  'You are a CV data extraction assistant. Your primary task is to preserve the ORIGINAL LANGUAGE of the input text. Do not translate any content. Extract information exactly as spoken.',
-            },
-            {'role': 'user', 'content': prompt},
-          ],
-          'model': 'meta-llama/llama-3.1-8b-instruct:free',
-          'max_tokens': 1500,
-          'temperature': 0.1,
-          'top_p': 0.9,
-        }),
-      );
+      final requestBody = json.encode({
+        'messages': [
+          {
+            'role': 'system',
+            'content': 'You are a CV data extraction assistant. Your primary task is to preserve the ORIGINAL LANGUAGE of the input text. Do not translate any content. Extract information exactly as spoken.',
+          },
+          {'role': 'user', 'content': prompt},
+        ],
+        'model': 'deepseek/deepseek-r1-0528:free',
+        'max_tokens': 3000,
+        'temperature': 0.1,
+        'top_p': 0.9,
+      });
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final jsonResponse = json.decode(response.body);
-        final content =
-            jsonResponse['choices'][0]['message']['content'] as String;
+      final completer = Completer<Map<String, dynamic>>();
 
-        print("Respuesta del LLM recibida");
+      final xhr = html.HttpRequest();
+      xhr.open('POST', 'https://openrouter.ai/api/v1/chat/completions');
+      xhr.setRequestHeader('Authorization', 'Bearer $apiKey');
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('HTTP-Referer', 'https://cv-generator-app.com');
 
-        // Múltiples estrategias de parsing
-        Map<String, dynamic>? parsedData = _robustJSONParse(content);
+      xhr.onLoad.listen((event) {
+        try {
+          if (xhr.status == 200) {
+            final data = json.decode(xhr.responseText!) as Map;
+            String content = data['choices']?[0]?['message']?['content']?.toString() ?? '';
 
-        if (parsedData != null) {
-          // Fusionar con defaultJson
-          Map<String, dynamic> result = Map.from(defaultJson);
-          parsedData.forEach((key, value) {
-            if (result.containsKey(key)) {
-              String cleanValue = (value?.toString() ?? '').trim();
-              if (cleanValue.isNotEmpty) {
-                // Convert spoken numbers to digits for phone numbers
-                if (key == 'telefono') {
-                  cleanValue = _convertSpokenNumbersToDigits(cleanValue);
-                }
-                result[key] = cleanValue;
-              }
-            }
-          });
+            // Remover tags <think> de DeepSeek R1
+            content = content.replaceAll(RegExp(r'<think>[\s\S]*?<\/think>', caseSensitive: false), '').trim();
 
-          print("✅ Datos organizados por LLM exitosamente");
-          return result;
+            // Extraer JSON del response
+            final codeBlock = RegExp(r'```(?:json)?\s*([\s\S]*?)```').firstMatch(content);
+            if (codeBlock != null) content = codeBlock.group(1)!.trim();
+            final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(content);
+            if (jsonMatch != null) content = jsonMatch.group(0)!;
+
+            final parsed = json.decode(content) as Map<String, dynamic>;
+            print('[ANÁLISIS LLM] OK - ${parsed.keys.length} campos recibidos');
+            if (!completer.isCompleted) completer.complete(parsed);
+          } else {
+            print('[ANÁLISIS LLM] OpenRouter error ${xhr.status}: ${xhr.responseText}');
+            if (!completer.isCompleted) completer.complete({});
+          }
+        } catch (e) {
+          print('[ANÁLISIS LLM] Error parseando respuesta: $e');
+          if (!completer.isCompleted) completer.complete({});
         }
+      });
+
+      xhr.onError.listen((event) {
+        print('[ANÁLISIS LLM] XHR error llamando OpenRouter');
+        if (!completer.isCompleted) completer.complete({});
+      });
+
+      xhr.send(requestBody);
+      final parsedData = await completer.future;
+
+      if (parsedData.isNotEmpty) {
+        Map<String, dynamic> result = Map.from(defaultJson);
+        int fieldsPopulated = 0;
+
+        parsedData.forEach((key, value) {
+          if (result.containsKey(key)) {
+            String cleanValue = (value?.toString() ?? '').trim();
+            if (cleanValue.isNotEmpty) {
+              if (key == 'telefono') {
+                cleanValue = _convertSpokenNumbersToDigits(cleanValue);
+              }
+              result[key] = cleanValue;
+              fieldsPopulated++;
+            }
+          }
+        });
+
+        print("[ANÁLISIS LLM] OK - $fieldsPopulated campos poblados");
+        return result;
+      } else {
+        print("[ANÁLISIS LLM] respuesta vacía, usando fallback");
       }
     } catch (e) {
-      print("❌ Error con OpenRouter: $e");
+      print("[ANÁLISIS LLM] Exception: $e");
     }
 
     // Fallback si el LLM falla
@@ -1142,197 +1193,10 @@ CRITICAL RULES:
     return result;
   }
 
-  // Método para validar información con la IA
   Future<bool> _validateInfoWithAI() async {
-    try {
-      // Actualizar la API key de OpenRouter
-      final openRouterApiKey = getEnvironmentVariable('OPENROUTER_API_KEY');
-      final openRouterUrl = Uri.parse(
-        'https://openrouter.ai/api/v1/chat/completions',
-      );
-
-      // Construir el prompt para el LLM - hacerlo más específico para evitar respuestas inválidas
-      final prompt = '''
-Valida la siguiente información de un CV y devuelve un JSON con los errores encontrados.
-
-INSTRUCCIONES IMPORTANTES:
-1. DEBES devolver un objeto JSON válido con EXACTAMENTE la estructura que se indica abajo.
-2. NO incluyas ningún texto adicional antes o después del JSON.
-3. El campo "esValido" debe ser exactamente true o false (booleano).
-4. El campo "errores" debe ser un array, incluso si está vacío.
-5. IMPORTANTE: Los campos vacíos o faltantes son PERMITIDOS - solo valida el FORMATO de los campos que tienen contenido.
-6. No reportes como error que falten campos o que estén vacíos.
-
-Información a validar:
-${json.encode(_editableInfo)}
-
-Estructura EXACTA de respuesta requerida:
-{
-  "esValido": true,
-  "errores": []
-}
-
-O si hay errores de formato:
-{
-  "esValido": false,
-  "errores": [
-    {
-      "campo": "nombre del campo con error",
-      "problema": "descripción del problema encontrado",
-      "sugerencia": "sugerencia para corregir el problema (opcional)"
-    }
-  ]
-}
-''';
-
-      // Añadir un manejo de errores más detallado y bypass de validación si hay problemas
-      try {
-        // Realizar la llamada a la API
-        final response = await http.post(
-          openRouterUrl,
-          headers: {
-            'Authorization': 'Bearer $openRouterApiKey',
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://cv-generator-app.com',
-          },
-          body: json.encode({
-            'messages': [
-              {'role': 'user', 'content': prompt},
-            ],
-            'model': 'meta-llama/llama-4-maverick:free',
-            'max_tokens': 2000,
-            'temperature': 0.1,
-          }),
-        );
-
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          // Procesamiento normal de la respuesta
-          final jsonResponse = json.decode(response.body);
-
-          // Extraer el contenido de la respuesta
-          final content =
-              jsonResponse['choices'][0]['message']['content'] as String;
-          print("Contenido original LLM: $content");
-
-          try {
-            // Intento #1: Intentar parsear directamente (por si el LLM ya respondió correctamente)
-            try {
-              final validationResult = json.decode(content);
-              print("Parseo directo exitoso: $validationResult");
-
-              // Verificar que tiene la estructura esperada
-              if (validationResult.containsKey('esValido')) {
-                bool esValido = validationResult['esValido'] ?? false;
-                List<dynamic> errores = validationResult['errores'] ?? [];
-
-                // Procesar el resultado
-                if (esValido && errores.isEmpty) {
-                  setState(() {
-                    _formError = '';
-                  });
-                  return true;
-                } else {
-                  _mostrarErroresValidacion(errores);
-                  return false;
-                }
-              }
-            } catch (e) {
-              print("Parseo directo falló: $e");
-              // Continuar con limpieza
-            }
-
-            // Intento #2: Eliminar posibles decoradores markdown y extraer JSON
-            String cleanedContent =
-                content.replaceAll('```json', '').replaceAll('```', '').trim();
-            print("Contenido sin markdown: $cleanedContent");
-
-            // Utilizar expresión regular para encontrar el objeto JSON
-            RegExp jsonRegex = RegExp(r'(\{.*\})', dotAll: true);
-            var match = jsonRegex.firstMatch(cleanedContent);
-
-            if (match != null) {
-              String jsonStr = match.group(1) ?? '';
-              print("JSON extraído con regex: $jsonStr");
-
-              try {
-                final validationResult = json.decode(jsonStr);
-
-                if (validationResult.containsKey('esValido')) {
-                  bool esValido = validationResult['esValido'] ?? false;
-                  List<dynamic> errores = validationResult['errores'] ?? [];
-
-                  // Procesar el resultado
-                  if (esValido && errores.isEmpty) {
-                    setState(() {
-                      _formError = '';
-                    });
-                    return true;
-                  } else {
-                    _mostrarErroresValidacion(errores);
-                    return false;
-                  }
-                } else {
-                  throw Exception(
-                    "Estructura JSON incorrecta, falta campo 'esValido'",
-                  );
-                }
-              } catch (e) {
-                print("Parseo del JSON extraído falló: $e");
-                // Continuar con solución de emergencia
-              }
-            }
-
-            // Solución de emergencia: Crear un objeto de validación que permita continuar
-            print("Usando solución de emergencia: asumir que es válido");
-            setState(() {
-              _formError =
-                  'La IA no pudo validar el formato, pero se procederá a guardar.';
-            });
-
-            // Permitir guardar aunque haya habido un problema con la validación
-            return true;
-          } catch (e) {
-            print("Error general en procesamiento: $e");
-            setState(() {
-              _formError =
-                  'Error al analizar la respuesta. Se procederá a guardar sin validar.';
-            });
-            return true;
-          }
-        } else {
-          print("Error HTTP: ${response.statusCode}, ${response.body}");
-
-          // Si hay error de API, permitir guardar de todos modos
-          setState(() {
-            _formError =
-                'Error en la validación con IA. Se procederá a guardar sin validar.';
-          });
-
-          // Permitir continuar sin validación cuando hay error de API
-          return true;
-        }
-      } catch (e) {
-        print("Error al conectar con OpenRouter: $e");
-
-        // Si hay error de conexión, permitir guardar de todos modos
-        setState(() {
-          _formError =
-              'Error en la conexión con IA. Se procederá a guardar sin validar.';
-        });
-
-        // Permitir continuar sin validación cuando hay error de conexión
-        return true;
-      }
-    } catch (e) {
-      print("Error general en _validateInfoWithAI: $e");
-      setState(() {
-        _formError =
-            'Error al validar información: Se procederá a guardar sin validar.';
-      });
-
-      // Permitir guardar aunque haya error
-      return true;
-    }
+    // Validación básica local — sin Edge Functions
+    setState(() => _formError = '');
+    return true;
   }
 
   // Método para mostrar errores de validación de forma legible
@@ -2114,6 +1978,8 @@ O si hay errores de formato:
 
   @override
   void dispose() {
+    _webAudioElement?.remove();
+    _webAudioElement = null;
     _audioRecorder.dispose();
     _audioPlayer.dispose();
     _pageController.dispose();
@@ -2886,5 +2752,3 @@ String normalizarTexto(String texto) {
   return textoNormalizado;
 }
 
-final String? assemblyApiKey = getEnvironmentVariable('ASSEMBLY_API_KEY');
-final String? openRouterApiKey = getEnvironmentVariable('OPENROUTER_API_KEY');
