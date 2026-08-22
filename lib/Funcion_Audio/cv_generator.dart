@@ -944,7 +944,7 @@ CRITICAL RULES:
           },
           {'role': 'user', 'content': prompt},
         ],
-        'model': 'deepseek/deepseek-r1-0528:free',
+        'model': 'openrouter/free',
         'max_tokens': 3000,
         'temperature': 0.1,
         'top_p': 0.9,
