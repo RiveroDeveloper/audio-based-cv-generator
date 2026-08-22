@@ -13,8 +13,29 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:js' as js;
 
+// Compile-time defines (--dart-define) work on all platforms, including web
+String? _fromDartDefine(String key) {
+  switch (key) {
+    case 'SUPABASE_URL':
+      return const String.fromEnvironment('SUPABASE_URL');
+    case 'SUPABASE_ANON_KEY':
+      return const String.fromEnvironment('SUPABASE_ANON_KEY');
+    case 'ELEVENLABS_API_KEY':
+      return const String.fromEnvironment('ELEVENLABS_API_KEY');
+    case 'OPENROUTER_API_KEY':
+      return const String.fromEnvironment('OPENROUTER_API_KEY');
+    default:
+      return null;
+  }
+}
+
 // Helper function to get environment variables across platforms
 String? getEnvironmentVariable(String key) {
+  final fromDefines = _fromDartDefine(key);
+  if (fromDefines != null && fromDefines.isNotEmpty) {
+    return fromDefines;
+  }
+
   if (kIsWeb) {
     try {
       // For web builds, try to get from window.ENV first
