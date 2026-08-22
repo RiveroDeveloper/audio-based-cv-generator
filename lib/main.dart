@@ -46,18 +46,16 @@ Future<void> main() async {
   try {
     print('🔄 Loading environment variables...');
 
-    // Try to load .env file (works for development)
-    if (!kIsWeb) {
-      await dotenv.load(fileName: ".env");
-    }
+    // Load .env file (bundled as an asset on web, from disk on other platforms)
+    await dotenv.load(fileName: ".env");
 
     // Get environment variables using our helper function
     supabaseUrl = getEnvironmentVariable('SUPABASE_URL');
     supabaseAnonKey = getEnvironmentVariable('SUPABASE_ANON_KEY');
 
     print('✅ Environment variables loaded');
-    print('📡 URL: ${supabaseUrl?.substring(0, 20)}...');
-    print('🔑 Key: ${supabaseAnonKey?.substring(0, 20)}...');
+    print('📡 URL: ${supabaseUrl != null && supabaseUrl!.length > 20 ? supabaseUrl!.substring(0, 20) : supabaseUrl}...');
+    print('🔑 Key: ${supabaseAnonKey != null && supabaseAnonKey!.length > 20 ? supabaseAnonKey!.substring(0, 20) : supabaseAnonKey}...');
   } catch (e) {
     print('⚠️ Error loading environment variables: $e');
     print('🔄 Using hardcoded credentials as fallback...');
